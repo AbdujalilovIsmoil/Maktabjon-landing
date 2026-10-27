@@ -66,7 +66,7 @@ function Rig({ children }: { children: React.ReactNode }) {
 
 export default function HeroScene() {
   return (
-    <Canvas camera={{ position: [0, 0, 7.5], fov: 42 }} dpr={[1, 2]} gl={{ alpha: true, antialias: true }}>
+    <Canvas camera={{ position: [0, 0, 7.5], fov: 42 }} dpr={[1, 1.5]} gl={{ alpha: true, antialias: false }}>
       <ambientLight intensity={0.8} />
       <directionalLight position={[4, 5, 5]} intensity={2} />
       <Environment preset="city" />

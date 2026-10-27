@@ -1,11 +1,13 @@
 'use client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Float, Lightformer, Sparkles } from '@react-three/drei';
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Atom, Book, BookStack, BookTower, Cap, Earth, Interactive, Pencil, Shield } from './models';
 import { S, STAGE_GAP } from '@/lib/scrollState';
 import { useTheme } from '@/lib/useTheme';
+import FpsLimit from './FpsLimit';
+import { dprFor, getTier } from '@/lib/perf';
 
 const M = THREE.MathUtils;
 const smooth = (a: number, b: number, x: number) => { const t = M.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -15,29 +17,57 @@ function Rig() {
   const smoothF = useRef(0);
   const frames = useRef(0);
   const sm = useRef({ x: 0, y: 0 });
+  const cache = useRef<{ els: HTMLElement[]; top: number[]; hh: number[] }>({ els: [], top: [], hh: [] });
+  const canvasEl = useRef<HTMLElement | null>(null);
+  const lastOp = useRef('');
+
+  // Layout o'lchovlarini faqat o'lcham o'zgarganda qayta hisoblaymiz (har kadrda emas).
+  useEffect(() => {
+    const measure = () => {
+      const els = Array.from(document.querySelectorAll<HTMLElement>('[data-stage]'));
+      const c = cache.current; c.els = els;
+      els.forEach((e, i) => {
+        const r = e.getBoundingClientRect();
+        c.top[i] = r.top + window.scrollY; c.hh[i] = r.height;
+        S.h[i] = e.offsetHeight;
+        const cs = getComputedStyle(e); S.pt[i] = parseFloat(cs.paddingTop) || 0; S.pb[i] = parseFloat(cs.paddingBottom) || 0;
+      });
+      canvasEl.current = document.getElementById('scene');
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener('load', measure);
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 2000);
+    return () => { ro.disconnect(); window.removeEventListener('load', measure); window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+
   useFrame((state, dt) => {
     if (frames.current < 12 && ++frames.current === 12) window.__mjScene = true;
-    const els = document.querySelectorAll<HTMLElement>('[data-stage]');
-    if (els.length) {
+    const c = cache.current;
+    const n = c.els.length;
+    if (n) {
       const vh = window.innerHeight;
       const mid = vh / 2;
-      els.forEach((e, i) => { S.h[i] = e.offsetHeight; const cs = getComputedStyle(e); S.pt[i] = parseFloat(cs.paddingTop) || 0; S.pb[i] = parseFloat(cs.paddingBottom) || 0; });
-      const centers = Array.from(els).map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2 - mid; });
+      const sy = window.scrollY;
+      const cen = (i: number) => c.top[i] + c.hh[i] / 2 - sy - mid;
       let f = 0;
-      if (centers[0] < 0) {
-        f = centers.length - 1;
-        for (let i = 0; i < centers.length - 1; i++) {
-          if (centers[i + 1] > 0) { f = i + -centers[i] / (centers[i + 1] - centers[i]); break; }
+      if (cen(0) < 0) {
+        f = n - 1;
+        for (let i = 0; i < n - 1; i++) {
+          const a = cen(i), b = cen(i + 1);
+          if (b > 0) { f = i + -a / (b - a); break; }
         }
       }
       const prev = smoothF.current;
       smoothF.current = M.damp(smoothF.current, f, 3.2, dt);
       S.vel = M.damp(S.vel, (smoothF.current - prev) / Math.max(dt, 1e-3), 6, dt);
       S.f = smoothF.current;
-      const last = centers[centers.length - 1];
+      const last = cen(n - 1);
       const fade = 1 - 0.96 * smooth(0.05, 0.6, -last / vh);
-      const canvas = document.getElementById('scene');
-      if (canvas) canvas.style.opacity = String(fade * (state.size.width <= 860 || state.size.width / state.size.height < 1.1 ? 0.5 : 1));
+      const op = String(fade * (state.size.width <= 860 || state.size.width / state.size.height < 1.1 ? 0.5 : 1));
+      if (canvasEl.current && op !== lastOp.current) { canvasEl.current.style.opacity = op; lastOp.current = op; }
     }
     sm.current.x = M.damp(sm.current.x, state.pointer.x, 3, dt);
     sm.current.y = M.damp(sm.current.y, state.pointer.y, 3, dt);
@@ -128,23 +158,27 @@ function Props() {
 export default function Scene() {
   const theme = useTheme();
   const dark = theme === 'dark';
+  const [tier] = useState(getTier);
+  const low = tier === 'low';
   return (
     <div id="scene" aria-hidden>
       <Canvas
         camera={{ position: [0, 0, 11], fov: 40 }}
-        dpr={[1, 1.75]}
-        gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+        frameloop={low ? 'demand' : 'always'}
+        dpr={dprFor(tier)}
+        gl={{ alpha: true, antialias: tier === 'high', powerPreference: 'high-performance' }}
         eventSource={typeof document !== 'undefined' ? document.body : undefined}
         eventPrefix="client"
       >
         <Suspense fallback={null}>
           <Lights />
-          <Environment resolution={128}>
+          <Environment resolution={low ? 64 : 128}>
             <Lightformer form="rect" intensity={dark ? 5 : 5} position={[0, 5, 5]} scale={[14, 6, 1]} />
             <Lightformer form="rect" intensity={4} position={[-6, 0, 3]} scale={[4, 8, 1]} color="#8b5cf6" />
             <Lightformer form="rect" intensity={4} position={[6, 0, 3]} scale={[4, 8, 1]} color="#00c2ff" />
           </Environment>
           <Rig />
+          {low && <FpsLimit fps={30} />}
           <Stage i={0} side={1} k0={0.95}>
             <Swap when="dark"><Earth /></Swap>
             <Swap when="light"><group scale={0.85}><BookTower /></group></Swap>
@@ -156,7 +190,7 @@ export default function Scene() {
           </Stage>
           <Stage i={3} side={-1}><Interactive speed={0.5}><group scale={1.1}><Cap /></group></Interactive></Stage>
           <Props />
-          <Sparkles count={260} scale={[22, 56, 10]} position={[0, -18, -2]} size={3.2} speed={0.35} opacity={dark ? 0.9 : 0.7} color={dark ? '#9bd1ff' : '#2f86eb'} />
+          <Sparkles count={tier === 'high' ? 260 : low ? 70 : 130} scale={[22, 56, 10]} position={[0, -18, -2]} size={3.2} speed={0.35} opacity={dark ? 0.9 : 0.7} color={dark ? '#9bd1ff' : '#2f86eb'} />
         </Suspense>
       </Canvas>
     </div>

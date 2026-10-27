@@ -12,6 +12,7 @@ import BackToTop from './BackToTop';
 import ThemeToggle from './ThemeToggle';
 import Simulator from './Simulator';
 import CareerFinder from './CareerFinder';
+import { isTouch } from '@/lib/perf';
 
 const words = (s: string) => s.split(' ').map((w, i) => <span className="w" key={i}><span>{w}&nbsp;</span></span>);
 
@@ -44,11 +45,21 @@ export default function Landing() {
   useLayoutEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const lenis = new Lenis({ lerp: reduce ? 1 : 0.085, wheelMultiplier: 0.95 });
-    lenis.on('scroll', ScrollTrigger.update);
-    const tick = (t: number) => lenis.raf(t * 1000);
-    gsap.ticker.add(tick);
-    gsap.ticker.lagSmoothing(0);
+    // Sensorli qurilmalarda (Android) native scroll ishlatamiz: Lenis faqat desktopda.
+    const touch = isTouch();
+    ScrollTrigger.config({ ignoreMobileResize: true });
+    const lenis = touch ? null : new Lenis({ lerp: reduce ? 1 : 0.085, wheelMultiplier: 0.95, autoRaf: false });
+    lenis?.on('scroll', ScrollTrigger.update);
+    const tick = (t: number) => lenis?.raf(t * 1000);
+    if (lenis) { gsap.ticker.add(tick); gsap.ticker.lagSmoothing(0); }
+    // scroll hodisasi (passive) — faqat sensorli rejimda; lenis bo'lsa uning o'z hodisasi bor
+    const onScroll = (fn: () => void) => {
+      if (lenis) { lenis.on('scroll', fn); return () => lenis.off('scroll', fn); }
+      let queued = false;
+      const h = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fn(); }); };
+      window.addEventListener('scroll', h, { passive: true });
+      return () => window.removeEventListener('scroll', h);
+    };
 
     let introFn: () => void = () => {};
     const heroCounters: gsap.core.Tween[] = [];
@@ -104,9 +115,11 @@ export default function Landing() {
       }
 
       // Kasblar tasmasi: scroll tezligiga qarab qiyshayadi
-      const skew = gsap.quickTo('.marquee-track', 'skewX', { duration: 0.6, ease: 'power3' });
-      lenis.on('scroll', ({ velocity }: { velocity: number }) => skew(gsap.utils.clamp(-14, 14, -velocity * 0.9)));
-      ScrollTrigger.addEventListener('scrollEnd', () => skew(0));
+      if (lenis) {
+        const skew = gsap.quickTo('.marquee-track', 'skewX', { duration: 0.6, ease: 'power3' });
+        lenis.on('scroll', ({ velocity }: { velocity: number }) => skew(gsap.utils.clamp(-14, 14, -velocity * 0.9)));
+        ScrollTrigger.addEventListener('scrollEnd', () => skew(0));
+      }
 
       // CTA
       gsap.from('.get', { scale: 0.9, y: 60, ease: 'none', scrollTrigger: { trigger: '.get', start: 'top 100%', end: 'top 45%', scrub: true } });
@@ -124,13 +137,15 @@ export default function Landing() {
       for (const id of spyIds) { const e = document.getElementById(id); if (e && e.getBoundingClientRect().top <= line) cur = SPY[id]; }
       setActive(cur);
     };
-    lenis.on('scroll', spy); spy();
+    const offSpy = onScroll(spy); spy();
     const onAnchor = (e: MouseEvent) => {
       const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#"]'); if (!a) return;
       const id = a.getAttribute('href')!;
       if (id.length < 2) { e.preventDefault(); return; }
       const t = document.querySelector<HTMLElement>(id); if (!t) return;
-      e.preventDefault(); lenis.scrollTo(id === '#top' ? 0 : t, { offset: id === '#top' ? 0 : -60, duration: 1.5 });
+      e.preventDefault();
+      if (lenis) lenis.scrollTo(id === '#top' ? 0 : t, { offset: id === '#top' ? 0 : -60, duration: 1.5 });
+      else window.scrollTo({ top: id === '#top' ? 0 : t.getBoundingClientRect().top + window.scrollY - 60, behavior: 'smooth' });
     };
     document.addEventListener('click', onAnchor);
 
@@ -147,9 +162,9 @@ export default function Landing() {
     const gx = glow ? gsap.quickTo(glow, 'x', { duration: 0.5, ease: 'power3' }) : null;
     const gy = glow ? gsap.quickTo(glow, 'y', { duration: 0.5, ease: 'power3' }) : null;
     const onMove = (e: PointerEvent) => { gx?.(e.clientX); gy?.(e.clientY); };
-    window.addEventListener('pointermove', onMove);
+    if (!touch) window.addEventListener('pointermove', onMove, { passive: true });
 
-    const magnets = Array.from(root.current!.querySelectorAll<HTMLElement>('.magnet'));
+    const magnets = touch ? [] : Array.from(root.current!.querySelectorAll<HTMLElement>('.magnet'));
     const offs = magnets.map((m) => {
       const move = (e: PointerEvent) => { const r = m.getBoundingClientRect(); gsap.to(m, { x: (e.clientX - r.left - r.width / 2) * 0.3, y: (e.clientY - r.top - r.height / 2) * 0.4, duration: 0.4 }); };
       const leave = () => gsap.to(m, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1,.4)' });
@@ -158,7 +173,7 @@ export default function Landing() {
     });
 
     // Kartalar 3D tilt
-    const tilts = Array.from(root.current!.querySelectorAll<HTMLElement>('.tilt'));
+    const tilts = touch ? [] : Array.from(root.current!.querySelectorAll<HTMLElement>('.tilt'));
     const toffs = tilts.map((c) => {
       const move = (e: PointerEvent) => { const r = c.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width - 0.5; const y = (e.clientY - r.top) / r.height - 0.5; gsap.to(c, { rotateY: x * 14, rotateX: -y * 14, duration: 0.4, transformPerspective: 800 }); };
       const leave = () => gsap.to(c, { rotateX: 0, rotateY: 0, duration: 0.8, ease: 'power3.out' });
@@ -167,7 +182,7 @@ export default function Landing() {
     });
 
     return () => {
-      ctx.revert(); lenis.destroy(); gsap.ticker.remove(tick);
+      ctx.revert(); offSpy(); lenis?.destroy(); gsap.ticker.remove(tick);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('mj:loaded', runIntro); document.removeEventListener('click', onAnchor);
       offs.forEach((f) => f()); toffs.forEach((f) => f()); offObs.forEach((f) => f());
@@ -292,7 +307,7 @@ export default function Landing() {
             {panels.map((p) => (
               <div className="h-panel" key={p.img}>
                 <div className="h-copy"><small>{p.r}</small><h3>{p.t}</h3><p>{p.d}</p></div>
-                <img className="ph" src={`/phones/${p.img}.png`} alt={p.t} />
+                <img className="ph" src={`/phones/${p.img}.webp`} alt={p.t} loading="lazy" decoding="async" />
               </div>
             ))}
           </div>
@@ -371,8 +386,8 @@ export default function Landing() {
                 <ul className="get-meta"><li>✓ Android 7.0+</li><li>✓ Bepul boshlash</li><li>✓ Ota-ona va o‘quvchi uchun</li></ul>
               </div>
               <div className="get-phones" aria-hidden>
-                <img className="gp1" src="/phones/student-2.png" alt="" />
-                <img className="gp2" src="/phones/student-1.png" alt="" />
+                <img className="gp1" src="/phones/student-2.webp" alt="" loading="lazy" decoding="async" />
+                <img className="gp2" src="/phones/student-1.webp" alt="" loading="lazy" decoding="async" />
               </div>
             </div>
           </div>

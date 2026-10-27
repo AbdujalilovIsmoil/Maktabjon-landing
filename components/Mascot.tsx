@@ -7,6 +7,8 @@ import { Cap } from './models';
 import { robotLock as L } from '@/lib/robotLock';
 import Rocket from './Rocket';
 import Peekers from './Peekers';
+import FpsLimit from './FpsLimit';
+import { dprFor, getTier } from '@/lib/perf';
 
 const M = THREE.MathUtils;
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -195,7 +197,7 @@ function Robot() {
 export default function Mascot() {
   return (
     <div id="mascot" aria-hidden>
-      <Canvas camera={{ position: [0, 0, 10], fov: 40 }} dpr={[1, 1.5]} gl={{ alpha: true, antialias: true }}
+      <Canvas camera={{ position: [0, 0, 10], fov: 40 }} frameloop={getTier() === 'low' ? 'demand' : 'always'} dpr={dprFor(getTier())} gl={{ alpha: true, antialias: getTier() === 'high' }}
         eventSource={typeof document !== 'undefined' ? document.body : undefined} eventPrefix="client">
         <ambientLight intensity={1.3} />
         <directionalLight position={[3, 5, 6]} intensity={3} />
@@ -203,6 +205,7 @@ export default function Mascot() {
           <Lightformer form="rect" intensity={4} position={[0, 5, 5]} scale={[12, 5, 1]} />
           <Lightformer form="rect" intensity={3} position={[-6, 0, 3]} scale={[4, 8, 1]} color="#8b5cf6" />
         </Environment>
+        {getTier() === 'low' && <FpsLimit fps={30} />}
         <Robot />
         <Peekers />
         <Rocket />

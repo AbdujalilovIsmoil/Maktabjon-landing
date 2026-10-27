@@ -304,3 +304,17 @@ main { overflow-x: clip; }
 
 /* telefonda "Ilova ichida" rasmlari to'liq kenglikda */
 @media (max-width: 520px) { .h-panel .ph { width: 100%; max-width: 100%; height: auto; } }
+
+/* ---- Mobil / sensorli qurilmalar: og'ir effektlarni yengillashtirish ---- */
+@media (hover: none), (max-width: 860px) {
+  .glass, .btn-ghost, .marquee, .to-top { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass { background: var(--glass-b); box-shadow: 0 8px 24px -12px rgba(0,0,0,.25); }
+  .marquee { background: var(--glass-b); }
+  .nav { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--glass-b); }
+  .ph, .get-phones img, .phone-sm { filter: none; box-shadow: 0 20px 40px -18px rgba(0,0,0,.4); }
+  .get .blob { filter: blur(30px); animation: none; }
+  .hero-copy, .pcard, .marquee-track { will-change: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track, .get .blob { animation: none; }
+}

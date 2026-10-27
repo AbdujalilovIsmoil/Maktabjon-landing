@@ -27,7 +27,7 @@ export default function CareerFinder() {
         ))}
       </div>
       <div className="result" key={sel.id}>
-        <img src={`/careers/career-${sel.c}.png`} alt={sel.n} />
+        <img src={`/careers/career-${sel.c}.webp`} alt={sel.n} decoding="async" />
         <div>
           <small>Sizga mos kasb</small>
           <h3>{sel.n}</h3>

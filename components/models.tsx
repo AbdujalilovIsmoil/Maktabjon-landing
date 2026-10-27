@@ -118,7 +118,7 @@ function useEarthTexture() {
     for (let i = 0; i <= 16; i++) { x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64, 512); x.stroke(); }
     for (let i = 0; i <= 8; i++) { x.beginPath(); x.moveTo(0, i * 64); x.lineTo(1024, i * 64); x.stroke(); }
     const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     return t;
   }, []);
 }
@@ -259,7 +259,7 @@ function Orbiter({ radius, speed, tilt, phase, children }: { radius: number; spe
 export function Earth() {
   const [day, spec, normal, clouds] = useTexture(['/earth/earth_atmos_2048.jpg', '/earth/earth_specular_2048.jpg', '/earth/earth_normal_2048.jpg', '/earth/earth_clouds_1024.png']);
   day.colorSpace = THREE.SRGBColorSpace; clouds.colorSpace = THREE.SRGBColorSpace;
-  [day, spec, normal, clouds].forEach((t) => { t.anisotropy = 8; });
+  [day, spec, normal, clouds].forEach((t) => { t.anisotropy = 4; });
   const root = useRef<THREE.Group>(null!);
   const globe = useRef<THREE.Group>(null!);
   const cl = useRef<THREE.Mesh>(null!);
